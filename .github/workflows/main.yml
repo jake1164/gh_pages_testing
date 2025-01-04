@@ -1,0 +1,44 @@
+name: Deploy
+# on a commit push to the gh-pages branch
+
+on:
+  release:
+    types: [ published ]
+    
+jobs:
+  deploy-to-github-pages:
+    # Use ubuntu latest
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+     
+    - name: Setup .NET CORE SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.x
+        
+    - name: Install .NET WASM Tools
+      run: dotnet workload install wasm-tools
+      
+    - name: Publish project with version
+      run: |
+        dotnet publish ShelterViewer.Web.Client/ShelterViewer.Web.Client.csproj \
+          /p:Configuration=Release \
+          /p:GHPages=true \
+          /p:Version=${{ github.event.release.tag_name }} \
+          --output release
+
+      # inject a ga4 script tag into the index.html
+    - name: Inject GA4 script tag
+      run: |
+        sed -i '/<\/head>/i <!-- Google tag (gtag.js) -->\n\t <script async src="https://www.googletagmanager.com/gtag/js?id=G-4BVHDFWKPL"></script> \n\t<script>\n\t window.dataLayer = window.dataLayer || [];\n\t function gtag(){dataLayer.push(arguments);} \n\t gtag("js", new Date());\n\t gtag("config", "G-4BVHDFWKPL");\n\t</script>'  release/wwwroot/index.html
+      env:
+        GA_TRACKING_ID_SECRET: ${{secrets.GA_TRACKING_ID}}
+        
+    - name: Commit wwwroot to Github Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: release/wwwroot
+        force_orphan: true
+

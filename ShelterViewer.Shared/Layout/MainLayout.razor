@@ -1,0 +1,87 @@
+﻿@inherits LayoutComponentBase
+@inject VaultService VaultService
+@inject LayoutService LayoutService
+
+@using System.Reflection
+
+<MudThemeProvider @ref="@_mudThemeProvider" Theme="@LayoutService.Theme" IsDarkMode="LayoutService.IsDarkMode" />
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudAppBar>
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        @if (VaultService.IsVaultEmpty())
+        {
+            <span>Fallout Shelter Viewer</span>
+        } else
+        {
+            <span>Fallout Shelter @VaultService.VaultData?.Vault.VaultName</span>
+        }
+
+        <MudSpacer/>
+        @if(!VaultService.IsVaultEmpty())
+        {
+            <MudText Style="padding-right: 20px;">@(VaultService.VaultData?.Vault.storage.resources.Nuka ?? 0) Caps</MudText>
+            <MudText>@(VaultService.VaultData?.Vault.storage.resources.NukaColaQuantum ?? 0) Nuka Quantums</MudText>
+        }
+        <MudTooltip Text="@(LayoutService.IsDarkMode ? "Switch to Light Theme" : "Switch to Dark Theme")" Delay="800" Arrow="true" Placement="Placement.Right" Color="Color.Dark">
+            <MudIconButton Icon="@LayoutService.DarkLightModeButtonIcon" Color="Color.Inherit" OnClick="@LayoutService.ToggleDarkMode" />
+        </MudTooltip>
+    </MudAppBar>
+    <MudDrawer @bind-Open="@_drawerOpen">
+        <NavMenu/>
+        <MudSpacer />
+        <MudText Align="Align.Center">Version: @GetVersion() </MudText>
+    </MudDrawer>
+    <MudMainContent>
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+    private MudThemeProvider _mudThemeProvider = null!;
+    private string _version => Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Dev";
+
+    protected override void OnInitialized()
+    {
+        VaultService.OnVaultChanged += async () => await InvokeAsync(StateHasChanged);
+        LayoutService.OnMajorUpdate += () => StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if(firstRender)
+        {
+            await ApplyUserPreferences();
+            StateHasChanged();
+        }
+    }
+
+    private string GetVersion()
+    {
+        return Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Dev";
+    }
+
+    private async Task ApplyUserPreferences()
+    {
+        var theme = await _mudThemeProvider.GetSystemPreference();
+        await LayoutService.ApplyUserPreferences(theme);
+    }
+
+    private async void UpdateTheme()
+    {
+        await LayoutService.ToggleDarkMode();
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+
+}

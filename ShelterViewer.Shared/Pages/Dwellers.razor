@@ -1,0 +1,194 @@
+﻿@page "/dwellers"
+@using ShelterViewer.Shared.Components.Dwellers
+@using ShelterViewer.Shared.Extensions
+
+@inject VaultService VaultService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<MudDataGrid T="Dweller" Items="DwellerList" QuickFilter="@_quickFilter" Filterable="true" >
+    <ToolBarContent>
+        <MudText typo="Typo.h6">Dwellers</MudText>
+        <MudSpacer />
+
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" Immediate="true"
+        AdornmentIcon="Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"/>
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="x => x.firstName" Title="First Name" />
+        <PropertyColumn Property="x => x.lastName" Title="Last Name" />
+        <PropertyColumn Property="x => x.Gender" Title="Gender" />
+
+        <!-- Theme Rarity?  add icon? 
+        <PropertyColumn Property="x => x.rarity" Title="Rarity" />
+        -->
+        <PropertyColumn Property="x => x.experience.currentLevel" Title="Level" />
+
+        <TemplateColumn Sortable="true" SortBy="x => x.health.healthValue" T="Dweller" Title="Health">
+            <CellTemplate>
+                <HealthComponent DwellerHealth="@context.Item.health" />
+            </CellTemplate>
+        </TemplateColumn>
+
+        <TemplateColumn Title="S.P.E.C.I.A.L" CellClass="special" Sortable="true" SortBy="x => x.stats.SPECIAL.Sum(z => z.ValueWithMod)" >
+            <CellTemplate>
+                <SpecialComponent Stats="@context.Item.stats" />
+            </CellTemplate>
+        </TemplateColumn>
+        
+        <TemplateColumn Title="Max Stat" Sortable="true" SortBy="x => x.stats.MaxStats.FirstOrDefault()!.Value">
+            <CellTemplate>
+                @if(context.Item.stats.MaxStats.Length == 7)
+                {
+                    <MudText>All: @context.Item.stats.MaxStats.First().Value</MudText>
+                }
+                else 
+                {
+                    @foreach(var stat in context.Item.stats.MaxStats.Select(stat => $"{stat.StatName}: {stat.Value}"))
+                    {
+                        <div>@stat</div>
+                    }
+                }
+            </CellTemplate>
+        </TemplateColumn>
+
+        <TemplateColumn T="Dweller" Title="Room" Sortable="true" SortBy="x => GetRoomName(x.AssignedRoom)" >
+            <CellTemplate>
+                <MudText>
+                    @{
+                        var room = VaultService.GetRoom(context.Item.AssignedRoom);
+                    }
+                    @(room?.Name ?? "Coffee Break") @if(room != null && !String.IsNullOrEmpty(room.Trait)) { <MudText Inline Color="MatchedRoom(context.Item, room)">@($" ( {room.Trait.FirstOrDefault()} )")</MudText> }
+                </MudText>
+            </CellTemplate>
+        </TemplateColumn>
+
+        <TemplateColumn T="Dweller" CellClass="d-flex justify-end">
+            <CellTemplate>
+                <MudStack Row>
+                    <MudButton Size="@Size.Small" 
+                    Variant="@Variant.Filled" 
+                    Color="@Color.Primary" 
+                    OnClick="() => ShowDweller(context.Item)">View</MudButton>
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="Dweller" />
+    </PagerContent>
+</MudDataGrid>
+
+<style>
+    .rtl-progress .mud-progress-linear-bar {
+    transform: scaleX(-1);
+    }
+    .mud-tooltip-root.mud-tooltip-inline {
+    display: unset;
+    width: 100%;
+    }
+    .special {
+    padding: 5px 0 0 0;
+    height: 65px;
+    }
+</style>
+@code {
+    List<Dweller> DwellerList { get; set; } = new();    
+    Dweller? selectedDweller;
+
+    private string _searchString = "";
+
+    protected override void OnInitialized()
+    {
+        if(VaultService.IsVaultEmpty())
+        {
+            NavigationManager.NavigateTo("/");
+        } 
+        else
+        {
+            DwellerList = VaultService.DwellerList;
+        }
+    }
+
+    private Task ShowDweller(Dweller selected)
+    {
+        selectedDweller = selected;
+
+        var options = new DialogOptions() { MaxWidth = MaxWidth.Large, FullWidth = true };
+        var parameters = new DialogParameters<DwellerInfo_Dialog>
+        {
+            { "DwellerId", selectedDweller.serializeId },
+            { "Dwellers", DwellerList.ToArray() }
+        };
+        return DialogService.ShowAsync<DwellerInfo_Dialog>("Dweller Info", parameters, options);
+    }
+
+    private String GetRoomName(int dwellerId)
+    {
+        var room = VaultService.GetRoom(dwellerId);
+
+        return (room == null || string.IsNullOrEmpty(room.Name)) ? "Coffee Break" : room.Name;
+    }
+
+    private Color MatchedRoom(Dweller dweller, Room room)
+    {
+        if(room == null)
+            return Color.Inherit;
+
+        foreach(Stats.MaxStat stat in dweller.MaxStats)
+        {
+            if (!string.IsNullOrEmpty(room!.Trait) && stat.StatName == room!.Trait.ToSpecialStat())
+                return Color.Success;
+        }
+
+        return Color.Warning;
+    }
+
+    private Func<Dweller, bool> _quickFilter => x =>
+    {
+        var intSearch = _searchString;
+        bool lt = false;
+        bool gt = false;
+        if (intSearch.StartsWith('<')){
+            lt = true;
+            intSearch = intSearch.Substring(((intSearch.StartsWith("<=")) ? 2 : 1));
+        }
+        if (intSearch.StartsWith('>')) {
+            gt = true;
+            intSearch = intSearch.Substring(((intSearch.StartsWith(">=")) ? 2 : 1));
+        }
+
+        if(int.TryParse(intSearch, out int n))
+        {            
+            if(lt)
+            {
+                if (x.experience.currentLevel <= n)
+                    return true;
+                return false;
+            }
+
+            if(gt)
+            {
+                if (x.experience.currentLevel >= n)
+                    return true;
+                return false;
+            }
+
+            if (x.experience.currentLevel == n)
+                return true;
+
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (x.lastName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (x.firstName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    };
+}

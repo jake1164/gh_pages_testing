@@ -1,0 +1,93 @@
+﻿@page "/rooms"
+@using ShelterViewer.Shared.Components.Rooms
+
+@inject VaultService VaultService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<h3>Rooms</h3>
+
+<MudDataGrid T="Room" Items="RoomList" Filterable="true">
+    <Columns>
+        <PropertyColumn Property="x => x.Name" Title="Room Name"/>
+        <TemplateColumn T="Room" Title="Vault Level / Position" Sortable="true" InitialDirection="SortDirection.Ascending" SortBy="x => x.row * 1000 + x.col">
+            <CellTemplate>
+                <span>@context.Item.row / @context.Item.col</span>
+            </CellTemplate>
+        </TemplateColumn>
+
+        <PropertyColumn Property="x => x.Trait" Title="Room trait" />
+        <PropertyColumn Property="x => x.level" Title="Room Level" />
+        <PropertyColumn Property="x => x.mergeLevel" Title="Merge Level" />
+        <PropertyColumn Property="x => x.DwellerIds.Count()" Title="Number Dwellers" />
+        <TemplateColumn T="Room">
+            <HeaderTemplate>
+                <MudTooltip Text="Maximum Room Speed (with armor mod)">
+                    <span>Max Room Speed</span>
+                </MudTooltip>
+            </HeaderTemplate>
+            <CellTemplate Context="context">
+                <span>@(context.Item.MaxRoomSpeed.HasValue && speedRooms.Contains(context.Item.type) ? $"{context.Item.MaxRoomSpeed} ({context.Item.MaxRoomSpeedWithMod})" : "")</span>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn T="Room">
+            <HeaderTemplate>
+                <MudTooltip Text="Sum of all assigned dwellers room trait (with armor mod)">
+                    <span>R2D Speed</span>
+                </MudTooltip>
+            </HeaderTemplate>
+            <CellTemplate Context="context">
+                <span>@(context.Item.CurrentRoomSpeed.HasValue && speedRooms.Contains(context.Item.type) ? $"{context.Item.CurrentRoomSpeed} {(context.Item.CurrentRoomSpeedWithMod.HasValue && context.Item.CurrentRoomSpeedWithMod > context.Item.CurrentRoomSpeed ? $"({context.Item.CurrentRoomSpeedWithMod})" : "")}" : "")</span>
+            </CellTemplate>
+        </TemplateColumn>
+
+        <TemplateColumn T="Room" CellClass="d-flex justify-end">
+            <CellTemplate>
+                <MudStack Row>
+                    <MudButton Size="@Size.Small"
+                    Variant="@Variant.Filled"
+                    Color="@Color.Primary"
+                    OnClick="() => ShowRoom(context.Item)">View</MudButton>
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="Room" />
+    </PagerContent>
+</MudDataGrid>
+
+@code {
+    List<Room> RoomList { get; set; } = new();
+    Room? selectedRoom;
+    string[] speedRooms =
+    {
+        "Cafeteria", "WaterPlant", "Geothermal", "Energy2",
+        "Water2", "NukaCola", "MedBay", "ScienceLab", "Radio",
+        "BarberShop", "Hydroponic"
+    };
+
+    protected override void OnInitialized()
+    {
+        if (VaultService.IsVaultEmpty())
+        {
+            NavigationManager.NavigateTo("/");
+        }
+        else 
+        {
+            RoomList = VaultService.Rooms.OrderBy(r => r.row).ThenBy(r => r.col).ToList();
+        }
+    }
+
+    private Task ShowRoom(Room selected)
+    {
+        selectedRoom = selected;
+
+        var options = new DialogOptions() { MaxWidth = MaxWidth.Large, FullWidth = true };
+        var parameters = new DialogParameters<RoomInfo_Dialog>
+        {
+            { "Room", selectedRoom }
+        };
+        return DialogService.ShowAsync<RoomInfo_Dialog>("Room Info", parameters, options);
+    }
+}
