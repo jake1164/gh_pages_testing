@@ -30,7 +30,7 @@ jobs:
 
     # inject a ga4 script tag into the index.html
     - name: Inject GA4 Tracking Code
-      uses: jake1164/ga4-ghpages@main
+      uses: jake1164/ga4-ghpages@test-inject
       with:
         tracking_id: ${{ secrets.GA_TRACKING_ID }}
         file: release/wwwroot/index.html
